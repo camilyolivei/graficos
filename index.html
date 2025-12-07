@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análise de Desempenho de Estruturas de Dados</title>
+    <!-- Carrega Tailwind CSS para estilização moderna e responsiva -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Carrega Chart.js para geração de gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Carrega o plugin Chart.js para escala logarítmica -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-autocolors"></script>
+    <style>
+        /* Define a fonte Inter como preferencial */
+        body { font-family: 'Inter', sans-serif; }
+        /* Estilos customizados para o canvas do gráfico, garantindo responsividade total */
+        .chart-container {
+            width: 100%;
+            height: 400px; /* Altura padrão para telas maiores */
+        }
+        @media (min-width: 1024px) {
+            /* Em telas grandes, ajusta a altura para os gráficos ficarem em 2x2 */
+            .chart-container {
+                height: 500px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 p-4 sm:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-10 text-center">
+            <h1 class="text-4xl font-extrabold text-blue-800 mb-2">Relatório de Desempenho de Estruturas de Dados</h1>
+            <p class="text-xl text-gray-600">Visualização Interativa dos Tempos de Execução (em nanosegundos)</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- GRÁFICO 1: INSERÇÃO EM DADOS ALEATÓRIOS -->
+            <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+                <h2 class="text-2xl font-semibold mb-4 text-blue-700">1. Inserção: Vetor vs. Árvores (Dados Aleatórios)</h2>
+                <div class="chart-container">
+                    <canvas id="chartInsercaoAleatoria"></canvas>
+                </div>
+                <p class="mt-4 text-sm text-gray-500">Compara o desempenho esperado ($O(1)$ amortizado para Vetor e $O(\log N)$ para Árvores Balanceadas) em um cenário típico (dados aleatórios).</p>
+            </div>
+
+            <!-- GRÁFICO 2: INSERÇÃO EM PIOR CASO (BST) -->
+            <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+                <h2 class="text-2xl font-semibold mb-4 text-blue-700">2. Inserção: Pior Caso na Árvore Binária de Busca Simples (BST)</h2>
+                <div class="chart-container">
+                    <canvas id="chartInsercaoPiorCaso"></canvas>
+                </div>
+                <p class="mt-4 text-sm text-gray-500">Demonstra a degradação da BST (que se torna $O(N)$) em comparação com a estabilidade da AVL ($O(\log N)$) para dados pré-ordenados. O eixo Y é logarítmico para acomodar a magnitude.</p>
+            </div>
+
+            <!-- GRÁFICO 3: BUSCA EM PIOR CASO -->
+            <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+                <h2 class="text-2xl font-semibold mb-4 text-blue-700">3. Busca: Sequencial vs. Binária vs. AVL vs. BST (Pior Caso)</h2>
+                <div class="chart-container">
+                    <canvas id="chartBusca"></canvas>
+                </div>
+                <p class="mt-4 text-sm text-gray-500">Compara as estratégias de busca, utilizando os tempos de busca para o último elemento (pior caso para Sequencial e BST degenerada).</p>
+            </div>
+
+            <!-- GRÁFICO 4: ORDENAÇÃO -->
+            <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+                <h2 class="text-2xl font-semibold mb-4 text-blue-700">4. Ordenação: Bubble Sort ($O(N^2)$) vs. Merge Sort ($O(N \log N)$)</h2>
+                <div class="chart-container">
+                    <canvas id="chartOrdenacao"></canvas>
+                </div>
+                <p class="mt-4 text-sm text-gray-500">Contrasta o crescimento quadrático do Bubble Sort com a eficiência log-linear do Merge Sort (dados aleatórios). O eixo Y é logarítmico devido à grande diferença de magnitude.</p>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // Configuração padrão para os gráficos
+        Chart.defaults.font.family = 'Inter, sans-serif';
+        Chart.defaults.color = '#374151'; // Cor do texto (cinza escuro)
+
+        // Definindo os dados extraídos do relatório (em nanosegundos)
+        const N_LABELS = ['100', '1.000', '10.000'];
+
+        const dataInsercaoAleatoria = {
+            vetor: [47840, 64440, 319710],
+            avl: [149480, 343440, 3163940],
+            binaria: [40560, 190530, 9716080]
+        };
+
+        const dataInsercaoPiorCaso = {
+            // Usando Ordenada (pior caso para BST)
+            bstOrdenada: [195950, 3389780, 309861900], // O(N^2)
+            avlOrdenada: [273590, 362470, 1056690], // O(log N)
+        };
+
+        const dataBuscaPiorCaso = {
+            // Usando 'Último elemento' como pior caso
+            vetorSequencial: [3290, 28340, 199050], // O(N)
+            vetorBinaria: [1460, 550, 730], // O(log N)
+            avl: [440, 420, 640], // O(log N)
+            bst: [6610, 18370, 73390], // O(N) quando degenerada
+        };
+
+        const dataOrdenacaoAleatoria = {
+            bubbleSort: [31730, 1546270, 101593400], // O(N^2)
+            mergeSort: [12730, 199440, 3122730], // O(N log N)
+        };
+
+        // Função utilitária para criar a configuração do gráfico
+        function createChartConfig(title, dataSets, axisType = 'linear') {
+            return {
+                type: 'line',
+                data: {
+                    labels: N_LABELS,
+                    datasets: dataSets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: false, // O título já está no HTML
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        // Formata o tempo em nanosegundos com separador de milhares
+                                        label += context.parsed.y.toLocaleString('pt-BR') + ' ns';
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Tamanho (N) de Elementos'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return N_LABELS[value];
+                                }
+                            }
+                        },
+                        y: {
+                            type: axisType,
+                            title: {
+                                display: true,
+                                text: 'Tempo (nanosegundos)'
+                            },
+                            // Configuração para escala logarítmica (se necessário)
+                            ...(axisType === 'logarithmic' && {
+                                ticks: {
+                                    callback: function(value, index) {
+                                        // Exibe apenas valores inteiros logarítmicos 
+                                        if (value === 10 || value === 100 || value === 1000 || value === 10000 || value === 100000 || value === 1000000 || value === 10000000 || value === 100000000 || value === 1000000000) {
+                                            return value.toLocaleString('pt-BR');
+                                        }
+                                    }
+                                }
+                            })
+                        }
+                    }
+                }
+            };
+        }
+
+        // --- 1. GRÁFICO INSERÇÃO ALEATÓRIA ---
+        const config1 = createChartConfig('Inserção: Vetor vs. Árvores (Aleatório)', [
+            {
+                label: 'Vetor (O(1) amort.)',
+                data: dataInsercaoAleatoria.vetor,
+                borderColor: '#10B981', // Verde
+                backgroundColor: '#10B981',
+                tension: 0.2
+            },
+            {
+                label: 'AVL (O(log N))',
+                data: dataInsercaoAleatoria.avl,
+                borderColor: '#3B82F6', // Azul
+                backgroundColor: '#3B82F6',
+                tension: 0.2
+            },
+            {
+                label: 'Binária Simples (BST - Aleatório)',
+                data: dataInsercaoAleatoria.binaria,
+                borderColor: '#F59E0B', // Amarelo
+                backgroundColor: '#F59E0B',
+                tension: 0.2
+            }
+        ]);
+
+        // --- 2. GRÁFICO INSERÇÃO PIOR CASO ---
+        const config2 = createChartConfig('Inserção: Pior Caso na BST', [
+            {
+                label: 'BST (O(N²) Total)',
+                data: dataInsercaoPiorCaso.bstOrdenada,
+                borderColor: '#EF4444', // Vermelho (Pior Caso)
+                backgroundColor: '#EF4444',
+                tension: 0.2
+            },
+            {
+                label: 'AVL (O(log N) por Inserção)',
+                data: dataInsercaoPiorCaso.avlOrdenada,
+                borderColor: '#3B82F6', // Azul (Estável)
+                backgroundColor: '#3B82F6',
+                tension: 0.2
+            }
+        ], 'logarithmic'); // Eixo logarítmico para a grande diferença de magnitude
+
+        // --- 3. GRÁFICO BUSCA ---
+        const config3 = createChartConfig('Busca: Sequencial vs. Binária vs. AVL vs. BST', [
+            {
+                label: 'Vetor Sequencial (O(N))',
+                data: dataBuscaPiorCaso.vetorSequencial,
+                borderColor: '#F97316', // Laranja
+                backgroundColor: '#F97316',
+                tension: 0.2
+            },
+            {
+                label: 'Vetor Binária (O(log N))',
+                data: dataBuscaPiorCaso.vetorBinaria,
+                borderColor: '#10B981', // Verde
+                backgroundColor: '#10B981',
+                tension: 0.2
+            },
+            {
+                label: 'AVL (O(log N))',
+                data: dataBuscaPiorCaso.avl,
+                borderColor: '#3B82F6', // Azul
+                backgroundColor: '#3B82F6',
+                tension: 0.2
+            },
+            {
+                label: 'BST (Pior Caso O(N))',
+                data: dataBuscaPiorCaso.bst,
+                borderColor: '#EF4444', // Vermelho
+                backgroundColor: '#EF4444',
+                tension: 0.2
+            }
+        ]);
+
+
+        // --- 4. GRÁFICO ORDENAÇÃO ---
+        const config4 = createChartConfig('Ordenação: Bubble Sort vs. Merge Sort', [
+            {
+                label: 'Bubble Sort (O(N²))',
+                data: dataOrdenacaoAleatoria.bubbleSort,
+                borderColor: '#EF4444', // Vermelho (Pior Caso)
+                backgroundColor: '#EF4444',
+                tension: 0.2
+            },
+            {
+                label: 'Merge Sort (O(N log N))',
+                data: dataOrdenacaoAleatoria.mergeSort,
+                borderColor: '#3B82F6', // Azul (Estável)
+                backgroundColor: '#3B82F6',
+                tension: 0.2
+            }
+        ], 'logarithmic'); // Eixo logarítmico para a grande diferença de magnitude
+
+
+        // Função principal para renderizar todos os gráficos
+        function renderCharts() {
+            // Certifique-se de que o contexto exista antes de criar o gráfico
+            new Chart(document.getElementById('chartInsercaoAleatoria').getContext('2d'), config1);
+            new Chart(document.getElementById('chartInsercaoPiorCaso').getContext('2d'), config2);
+            new Chart(document.getElementById('chartBusca').getContext('2d'), config3);
+            new Chart(document.getElementById('chartOrdenacao').getContext('2d'), config4);
+        }
+
+        // Renderiza os gráficos assim que a janela carregar
+        window.onload = renderCharts;
+
+    </script>
+</body>
+</html>
